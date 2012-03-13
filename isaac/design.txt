@@ -1,0 +1,10 @@
+Input: list of nodes, list of edges
+
+Mapper: Take edges, roll dice
+If node, output = ?
+If edge, roll dice, output = 
+
+
+Reducer: 
+
+Output: list of nodes marked as converted or not
