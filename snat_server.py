@@ -32,6 +32,7 @@
 import logging
 import subprocess
 import re
+import base64
 
 from time import time
 from rpclib.decorator import srpc
@@ -53,8 +54,8 @@ base_dfs_dir = "/user/hduser/"
 hadoop_dir = "/usr/local/hadoop/"
 
 def list_algorithms():
-    file = open(hadoop_dir+"algorithms.txt","r")
-    algos = [line.split() for line in file.read().split("\n") if line != ""]
+    myfile = open(hadoop_dir+"algorithms/algorithms.txt","r")
+    algos = [line.split() for line in myfile.read().split("\n") if line != ""]
     return algos
 
 def list_datasets():
@@ -64,16 +65,51 @@ def list_datasets():
 
 class SnatService(ServiceBase):
 
-    @srpc(String, ByteArray, _returns=Integer)
+    @srpc(String, String, _returns=String)
     def upload_data_set(data_set_name, data_set):
-        file = open("/tmp/snat_upload."+data_set_name,"w")
-        file.write(data_set_name)
-        # bin/hadoop dfs -copyFromLocal isaac/ruby/inf.txt /user/hduser/influence-graph
-        return 0 # On failure return 0, else return data_set_id
+        tmp_file_name = "/tmp/snat_upload."+data_set_name+".txt"
 
-    @srpc(String, String, ByteArray, _returns=Integer)
+        # check if dataset of that name already exists
+        dataset = [ds for ds in list_datasets() if ds == data_set_name]
+        if len(dataset) != 0:
+            return "fail! Dataset of that name already exists"
+
+        # delete existing temp file, if it exists
+        cmd = ["rm",tmp_file_name]
+        subprocess.call(cmd)        
+        myfile = open(tmp_file_name,"w")
+        myfile.write(base64.b64decode(data_set))
+        # bin/hadoop dfs -copyFromLocal /tmp/snat_upload.Readme2.txt /user/hduser/snat_datasets/RM
+        myfile.close()
+        
+        cmd = [hadoop_dir+"bin/hadoop",
+               "dfs",
+               "-copyFromLocal",
+               tmp_file_name,
+               base_dfs_dir+"snat_datasets/"+data_set_name]
+
+        return 0
+
+    @srpc(String, String, String, _returns=String)
     def upload_algorithm(algorithm_name, class_name, jar_file):
-        return 0 # On failure return 0, else return algorithm_id
+        algo = [algo for algo in list_algorithms() if algo[0] == algorithm_name]
+        if len(algo) != 0:
+            return "Algorithm with that name exists!"
+
+        jar_file_name = hadoop_dir + "algorithms/" + algorithm_name + ".jar"
+        
+        # delete existing jar file, if it exists
+        cmd = ["rm",jar_file_name]
+        subprocess.call(cmd)
+
+        myfile = open(jar_file_name,"w")
+        myfile.write(base64.b64decode(jar_file))
+        myfile.close()
+
+        myfile = open(hadoop_dir+"algorithms/algorithms.txt","a+")
+        myfile.write("\n"+algorithm_name+" "+algorithm_name+".jar "+class_name)
+        myfile.close()
+        return "Success!"
 
     @srpc(_returns=Iterable(String))
     def get_algorithms():
@@ -95,7 +131,7 @@ class SnatService(ServiceBase):
         else:
             input = base_dfs_dir+"snat_datasets/"+dataset[0]
             output = base_dfs_dir+"snat_output/"+algorithm_name+"-"+data_set_name+"-"+str(int(time()))
-            cmd = [hadoop_dir+"bin/hadoop","jar",algo[0][1],algo[0][2],input,output]
+            cmd = [hadoop_dir+"bin/hadoop","jar","algorithms/"+algo[0][1],algo[0][2],input,output]
             logging.info(cmd)
             ret = subprocess.call(cmd)
             cmd = [hadoop_dir+"bin/hadoop","dfs","-cat",output+"/part-r-00000"]
@@ -115,9 +151,9 @@ if __name__=='__main__':
     logging.basicConfig(level=logging.DEBUG)
     logging.getLogger('rpclib.protocol.xml').setLevel(logging.DEBUG)
 
-    logging.info("listening to http://127.0.0.1:7790")
-    logging.info("wsdl is at: http://localhost:7790/?wsdl")
+    logging.info("listening to http://127.0.0.1:7792")
+    logging.info("wsdl is at: http://localhost:7792/?wsdl")
 
     wsgi_app = wsgi_soap_application([SnatService], 'warwick.snat.soap')
-    server = make_server('127.0.0.1', 7790, wsgi_app)
+    server = make_server('127.0.0.1', 7792, wsgi_app)
     server.serve_forever()

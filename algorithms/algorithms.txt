@@ -1,0 +1,5 @@
+Independent_Cascade wordcount.jar me.saac.i.ConComs
+Linear_Threshold wordcount.jar me.saac.i.LinearThreshold
+Independent_Cascade Independent_Cascade.jar me.saac.i.IndyCascade
+
+Independent_Cascade2 Independent_Cascade2.jar me.saac.i.IndyCascade
